@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Diet Guide</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="src/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Diet Guide</h1>
+        <p class="subtitle">Set your weight-loss goal, then check each meal against it.</p>
+      </header>
+
+      <div id="home-view">
+        <section class="card">
+          <h2>Profiles</h2>
+          <p id="profiles-empty">No profiles yet. Create one for each person or each goal you want to track.</p>
+          <ul id="profile-list"></ul>
+          <button id="new-profile" type="button">New profile</button>
+        </section>
+      </div>
+
+      <div id="profile-view" hidden>
+        <nav class="profile-bar">
+          <button id="back-home" type="button" class="secondary">← All profiles</button>
+          <h2 id="profile-heading">
+            <button id="profile-title" type="button" title="Click to rename"></button>
+          </h2>
+          <form id="rename-form" novalidate hidden>
+            <input name="name" type="text" maxlength="40" aria-label="Profile name" required />
+            <button type="submit">Save</button>
+            <button id="cancel-rename" type="button" class="secondary">Cancel</button>
+          </form>
+        </nav>
+        <ul id="rename-errors" class="errors" role="alert"></ul>
+
+        <section id="goal-section" class="card">
+          <h2>1. Your goal</h2>
+          <div id="goal-summary" hidden>
+            <p id="goal-summary-text"></p>
+            <button id="edit-goal" type="button" class="secondary">Edit my goal</button>
+          </div>
+          <form id="profile-form" novalidate>
+            <div class="grid">
+              <label class="wide">Profile name
+                <input name="name" type="text" maxlength="40" placeholder="e.g. Yue – fall cut" required />
+              </label>
+              <label>Sex (for the calorie formula)
+                <select name="sex" required>
+                  <option value="">Choose…</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                </select>
+              </label>
+              <label>Age
+                <input name="age" type="number" inputmode="numeric" min="15" max="100" required />
+              </label>
+              <label>Height (cm)
+                <input name="heightCm" type="number" inputmode="decimal" min="120" max="230" required />
+              </label>
+              <label>Weight (kg)
+                <input name="weightKg" type="number" inputmode="decimal" min="35" max="300" step="0.1" required />
+              </label>
+              <label class="wide">Activity level
+                <select name="activity" required></select>
+              </label>
+              <label>Weight to lose (kg)
+                <input name="targetLossKg" type="number" inputmode="decimal" min="0.5" step="0.5" required />
+              </label>
+              <label>In how many weeks
+                <input name="weeks" type="number" inputmode="numeric" min="1" max="104" required />
+              </label>
+            </div>
+            <ul id="profile-errors" class="errors" role="alert"></ul>
+            <div class="actions">
+              <button type="submit">Save and calculate</button>
+              <button id="cancel-edit" type="button" class="secondary">Cancel</button>
+            </div>
+          </form>
+          <div id="plan" hidden></div>
+        </section>
+
+        <section id="meal-section" class="card" hidden>
+          <h2>2. Check a meal</h2>
+          <form id="meal-form" novalidate>
+            <div class="grid">
+              <label>Meal
+                <select name="mealType">
+                  <option>Breakfast</option>
+                  <option>Lunch</option>
+                  <option selected>Dinner</option>
+                  <option>Snack</option>
+                </select>
+              </label>
+              <label class="wide">What did you eat?
+                <select name="food" required></select>
+              </label>
+              <label id="custom-name-field" hidden>Food name
+                <input name="customName" type="text" maxlength="40" />
+              </label>
+              <label id="custom-kcal-field" hidden>Calories per 100 g
+                <input name="customKcal" type="number" inputmode="numeric" min="1" max="900" />
+              </label>
+              <label>Amount (g)
+                <input name="grams" type="number" inputmode="numeric" min="1" max="3000" required />
+              </label>
+            </div>
+            <ul id="meal-errors" class="errors" role="alert"></ul>
+            <button type="submit">Check this meal</button>
+          </form>
+          <div id="verdict" hidden></div>
+        </section>
+
+        <section id="today-section" class="card" hidden>
+          <h2>Today so far</h2>
+          <p id="today-empty">No meals logged today yet. Check a meal above to start.</p>
+          <ul id="today-list"></ul>
+          <p id="today-total"></p>
+          <button id="clear-today" type="button" class="secondary">Start today over</button>
+        </section>
+
+        <button id="delete-profile" type="button" class="danger">Delete this profile</button>
+      </div>
+    </main>
+  </body>
+</html>
