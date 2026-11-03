@@ -1,4 +1,5 @@
 import { ACTIVITY_LEVELS, dailyPlan, judgeMeal, validateGoal } from "./calculator.js";
+import { searchFoods } from "./foodSearch.js";
 import { FOODS, findFood } from "./foods.js";
 import {
   createProfile,
@@ -50,10 +51,6 @@ function fillSelects() {
     Object.entries(ACTIVITY_LEVELS)
       .map(([value, level]) => `<option value="${value}">${level.label}</option>`)
       .join("");
-  mealForm.food.innerHTML =
-    '<option value="">Choose a food…</option>' +
-    FOODS.map((food) => `<option>${escapeHtml(food.name)}</option>`).join("") +
-    `<option value="${OTHER_FOOD}">Something else…</option>`;
 }
 
 function readGoal() {
@@ -117,8 +114,7 @@ function showRenameForm(editing) {
 
 function resetProfileScreen() {
   profileForm.reset();
-  mealForm.reset();
-  mealForm.mealType.value = mealTypeForHour(new Date().getHours());
+  resetMealForm();
   renameForm.hidden = true;
   profileHeading.hidden = false;
   showErrors("rename-errors", []);
@@ -188,13 +184,19 @@ function renderPlan() {
   renderToday();
 }
 
+function describeMealFoods(meal) {
+  // Meals logged before multi-food meals have a single foodName and grams instead of items.
+  const items = meal.items ?? [{ name: meal.foodName, grams: meal.grams }];
+  return items.map((item) => `${item.grams} g ${escapeHtml(item.name)}`).join(" + ");
+}
+
 function renderToday() {
   const meals = todaysMeals(currentProfile.id);
   const eaten = meals.reduce((sum, meal) => sum + meal.kcal, 0);
   document.getElementById("today-empty").hidden = meals.length > 0;
   document.getElementById("clear-today").hidden = meals.length === 0;
   document.getElementById("today-list").innerHTML = meals
-    .map((m) => `<li>${escapeHtml(m.mealType)}: ${m.grams} g ${escapeHtml(m.foodName)}, ${m.kcal} kcal</li>`)
+    .map((m) => `<li>${escapeHtml(m.mealType)}: ${describeMealFoods(m)}, ${m.kcal} kcal</li>`)
     .join("");
   document.getElementById("today-total").textContent = meals.length
     ? `Eaten ${eaten} of ${plan.target} kcal. ${Math.max(plan.target - eaten, 0)} kcal left.`
@@ -217,21 +219,131 @@ function renderSuggestions({ heading, options }) {
   return `<div class="suggestions"><h4>${heading}</h4><ul>${items}</ul></div>`;
 }
 
-function selectedFood(data) {
-  if (data.get("food") !== OTHER_FOOD) return findFood(data.get("food"));
-  return { name: data.get("customName").trim(), kcalPer100g: Number(data.get("customKcal")) };
+// ---- Meal form: one row per food ----
+
+const foodRows = document.getElementById("food-rows");
+const foodRowTemplate = document.getElementById("food-row-template");
+
+const FOOD_OPTIONS =
+  '<option value="">Choose a food…</option>' +
+  FOODS.map((food) => `<option>${escapeHtml(food.name)}</option>`).join("") +
+  `<option value="${OTHER_FOOD}">Something else…</option>`;
+
+function updateRemoveButtons() {
+  const rows = foodRows.querySelectorAll(".food-row");
+  rows.forEach((row) => (row.querySelector(".remove-food").hidden = rows.length === 1));
 }
 
-function validateMeal(data, food) {
-  const problems = [];
-  if (!data.get("food")) problems.push("Choose what you ate.");
-  if (data.get("food") === OTHER_FOOD) {
-    if (!food.name) problems.push("Enter the food's name.");
-    if (!(food.kcalPer100g > 0 && food.kcalPer100g <= 900)) problems.push("Calories per 100 g must be between 1 and 900.");
+function showSearchMessage(row, message) {
+  row.querySelector(".search-area").hidden = false;
+  row.querySelector(".search-status").textContent = message;
+  row.querySelector(".search-results").replaceChildren();
+}
+
+function showSearchResults(row, results) {
+  showSearchMessage(row, "Pick the closest match. These are mostly packaged products, so check the calories look right.");
+  const list = row.querySelector(".search-results");
+  for (const result of results) {
+    const item = document.createElement("li");
+    item.innerHTML = `
+      <button type="button">
+        <span>${escapeHtml(result.name)}${result.brand ? `<br /><small>${escapeHtml(result.brand)}</small>` : ""}</span>
+        <span class="kcal">${result.kcalPer100g} kcal/100 g</span>
+      </button>`;
+    item.querySelector("button").addEventListener("click", () => {
+      row.querySelector('[name="customName"]').value = result.name;
+      row.querySelector('[name="customKcal"]').value = result.kcalPer100g;
+      showSearchMessage(row, `Filled in ${result.name}: ${result.kcalPer100g} kcal per 100 g. You can still edit it.`);
+    });
+    list.append(item);
   }
-  const grams = Number(data.get("grams"));
-  if (!(grams > 0 && grams <= 3000)) problems.push("Amount must be between 1 and 3000 g.");
-  return problems;
+}
+
+// Searching runs only on request (button or Enter), because Open Food Facts limits how often it can be searched.
+function setUpFoodSearch(row) {
+  const nameInput = row.querySelector('[name="customName"]');
+  const searchButton = row.querySelector(".search-food");
+
+  async function search() {
+    const query = nameInput.value.trim();
+    if (query.length < 2) {
+      showSearchMessage(row, "Type at least 2 letters of the food's name, then search.");
+      return;
+    }
+    searchButton.disabled = true;
+    showSearchMessage(row, `Searching for "${query}"…`);
+    try {
+      const results = await searchFoods(query);
+      if (results.length) showSearchResults(row, results);
+      else showSearchMessage(row, `No match for "${query}". Enter its calories per 100 g yourself below.`);
+    } catch (error) {
+      showSearchMessage(row, error.message);
+    } finally {
+      searchButton.disabled = false;
+    }
+  }
+
+  searchButton.addEventListener("click", search);
+  nameInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    search();
+  });
+}
+
+function addFoodRow() {
+  const row = foodRowTemplate.content.firstElementChild.cloneNode(true);
+  const select = row.querySelector("select");
+  select.innerHTML = FOOD_OPTIONS;
+  select.addEventListener("change", () => {
+    const isOther = select.value === OTHER_FOOD;
+    row.querySelectorAll(".custom-field").forEach((field) => (field.hidden = !isOther));
+    if (!isOther) row.querySelector(".search-area").hidden = true;
+  });
+  setUpFoodSearch(row);
+  row.querySelector(".remove-food").addEventListener("click", () => {
+    row.remove();
+    updateRemoveButtons();
+    // Row numbers in the messages shift once a row is gone, so clear them until the next check.
+    showErrors("meal-errors", []);
+  });
+  foodRows.append(row);
+  updateRemoveButtons();
+  return row;
+}
+
+function resetMealForm() {
+  mealForm.reset();
+  mealForm.mealType.value = mealTypeForHour(new Date().getHours());
+  foodRows.replaceChildren();
+  addFoodRow();
+}
+
+/** Reads every food row into { food, grams } items, plus any problems to show the user. */
+function readMealItems() {
+  const rows = [...foodRows.querySelectorAll(".food-row")];
+  const items = [];
+  const problems = [];
+  rows.forEach((row, index) => {
+    const label = rows.length > 1 ? `Food ${index + 1}: ` : "";
+    const choice = row.querySelector('[name="food"]').value;
+    const grams = Number(row.querySelector('[name="grams"]').value);
+    let food = findFood(choice);
+    if (!choice) problems.push(`${label}Choose what you ate.`);
+    if (choice === OTHER_FOOD) {
+      food = {
+        name: row.querySelector('[name="customName"]').value.trim(),
+        kcalPer100g: Number(row.querySelector('[name="customKcal"]').value),
+      };
+      if (!food.name) problems.push(`${label}Enter the food's name.`);
+      if (!(food.kcalPer100g > 0 && food.kcalPer100g <= 900)) {
+        problems.push(`${label}Calories per 100 g must be between 1 and 900.`);
+      }
+    }
+    if (!(grams > 0 && grams <= 3000)) problems.push(`${label}Amount must be between 1 and 3000 g.`);
+    if (food) items.push({ food, grams });
+  });
+  return { items, problems };
 }
 
 // ---- Events ----
@@ -289,28 +401,23 @@ document.getElementById("delete-profile").addEventListener("click", () => {
   showHome();
 });
 
-mealForm.food.addEventListener("change", () => {
-  const isOther = mealForm.food.value === OTHER_FOOD;
-  document.getElementById("custom-name-field").hidden = !isOther;
-  document.getElementById("custom-kcal-field").hidden = !isOther;
+document.getElementById("add-food").addEventListener("click", () => {
+  addFoodRow().querySelector("select").focus();
 });
 
 mealForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  const data = new FormData(mealForm);
-  const food = selectedFood(data) ?? {};
-  const problems = validateMeal(data, food);
+  const { items, problems } = readMealItems();
   showErrors("meal-errors", problems);
   if (problems.length) return;
 
+  const mealType = mealForm.mealType.value;
   const meals = todaysMeals(currentProfile.id);
-  const grams = Number(data.get("grams"));
   const eatenSoFar = meals.reduce((sum, meal) => sum + meal.kcal, 0);
-  const result = judgeMeal({ food, grams, dailyTarget: plan.target, eatenSoFar });
+  const result = judgeMeal({ items, dailyTarget: plan.target, eatenSoFar });
   const suggestions = suggestAlternatives({
-    food,
-    grams,
-    mealType: data.get("mealType"),
+    items,
+    mealType,
     verdict: result.verdict,
     dailyTarget: plan.target,
     remainingBefore: plan.target - eatenSoFar,
@@ -324,11 +431,11 @@ mealForm.addEventListener("submit", (event) => {
     </div>`;
   verdictBox.hidden = false;
 
-  meals.push({ mealType: data.get("mealType"), foodName: food.name, grams, kcal: result.kcal });
+  const loggedItems = items.map(({ food, grams }) => ({ name: food.name, grams }));
+  meals.push({ mealType, items: loggedItems, kcal: result.kcal });
   saveTodaysMeals(currentProfile.id, meals);
   renderToday();
 });
-
 document.getElementById("clear-today").addEventListener("click", () => {
   if (!confirm("Remove all of today's meals?")) return;
   saveTodaysMeals(currentProfile.id, []);

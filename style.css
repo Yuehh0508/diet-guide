@@ -367,3 +367,98 @@ button.danger {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.field-label {
+  margin: 16px 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+#food-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.food-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 44px;
+  gap: 8px;
+  align-items: end;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.food-row .remove-food {
+  margin-top: 0;
+  padding: 0;
+  min-width: 44px;
+}
+
+.food-row .custom-name,
+.food-row .custom-kcal,
+.food-row .search-area {
+  grid-column: 1 / -1;
+}
+
+.food-row .custom-name {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.food-row .custom-name label {
+  flex: 1;
+}
+
+.food-row .custom-name button {
+  margin-top: 0;
+}
+
+.food-row .custom-field[hidden],
+.food-row .search-area[hidden] {
+  display: none;
+}
+
+.search-status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.search-results {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: grid;
+  gap: 6px;
+}
+
+.search-results button {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  font-weight: normal;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-results small {
+  color: var(--muted);
+}
+
+.search-results .kcal {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#add-food {
+  margin-top: 12px;
+}

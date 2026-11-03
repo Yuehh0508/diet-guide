@@ -9,6 +9,8 @@ import { FOODS, findFood, swapKindFor } from "./foods.js";
 const MEAL_SHARES = { Breakfast: 0.25, Lunch: 0.35, Dinner: 0.3, Snack: 0.1 };
 const SIDE_GRAMS = 150;
 const MIN_PORTION_GRAMS = 50;
+// When shrinking a whole meal, smaller pieces than this are not worth suggesting.
+const MIN_SCALED_GRAMS = 20;
 // A swap only counts as lighter if it saves at least a quarter of the calories per gram.
 const LIGHTER_SWAP_RATIO = 0.75;
 const MAX_SWAPS = 2;
@@ -26,13 +28,18 @@ function gramsWithin(food, kcalBudget) {
   return roundDownToTen((kcalBudget * 100) / food.kcalPer100g);
 }
 
-function vegetableSideFor(food) {
-  return portion(findFood(food.name === "Broccoli" ? "Salad greens" : "Broccoli"), SIDE_GRAMS);
+function vegetableSideFor(items) {
+  const hasBroccoli = items.some((item) => item.food.name === "Broccoli");
+  return portion(findFood(hasBroccoli ? "Salad greens" : "Broccoli"), SIDE_GRAMS);
 }
 
-function option(items, remainingBefore, note) {
-  const kcal = items.reduce((sum, item) => sum + item.kcal, 0);
-  return { items, kcal, leftAfter: remainingBefore - kcal, note };
+function mealPortions(items) {
+  return items.map((item) => portion(item.food, item.grams));
+}
+
+function option(portions, remainingBefore, note) {
+  const kcal = portions.reduce((sum, item) => sum + item.kcal, 0);
+  return { items: portions, kcal, leftAfter: remainingBefore - kcal, note };
 }
 
 /** The closest lighter food of the same kind and the lightest one, so the two swaps feel different. */
@@ -46,28 +53,52 @@ function lighterSwaps(food) {
   return candidates.length <= MAX_SWAPS ? candidates : [candidates[0], candidates[candidates.length - 1]];
 }
 
-function ratherSuggestions({ food, grams, mealType, dailyTarget, remainingBefore }) {
-  const budget = Math.min(remainingBefore, Math.round(dailyTarget * MEAL_SHARES[mealType]));
+/**
+ * The same meal with everything except vegetables shrunk by the same factor to fit the
+ * budget, plus a vegetable side if the meal has none. Null if it cannot be done sensibly.
+ */
+function scaledDownMeal(items, budget, remainingBefore) {
+  const isVegetable = (item) => item.food.kind === "vegetable";
+  const side = items.some(isVegetable) ? [] : [vegetableSideFor(items)];
+  const fixed = [...mealPortions(items.filter(isVegetable)), ...side];
+  const fixedKcal = fixed.reduce((sum, item) => sum + item.kcal, 0);
+  const scalable = items.filter((item) => !isVegetable(item));
+  const scalableKcal = scalable.reduce((sum, item) => sum + portion(item.food, item.grams).kcal, 0);
+  if (scalableKcal === 0) return null;
+
+  const factor = (budget - fixedKcal) / scalableKcal;
+  if (factor <= 0 || factor >= 1) return null;
+  const scaled = scalable.map((item) => portion(item.food, roundDownToTen(item.grams * factor)));
+  if (scaled.some((item) => item.grams < MIN_SCALED_GRAMS)) return null;
+
+  const note = side.length
+    ? "The same meal in smaller portions, with vegetables so the plate stays full."
+    : "The same meal in smaller portions; the vegetables stay as they are.";
+  return option([...scaled, ...fixed], remainingBefore, note);
+}
+
+/** The meal with its highest-calorie food swapped for lighter foods of the same kind. */
+function swappedMeals(items, budget, remainingBefore) {
+  const portions = mealPortions(items);
+  const heaviestIndex = portions.reduce((best, item, i) => (item.kcal > portions[best].kcal ? i : best), 0);
+  const heaviest = items[heaviestIndex];
+  if (!heaviest.food.kind) return [];
+
+  const restKcal = portions.reduce((sum, item, i) => (i === heaviestIndex ? sum : sum + item.kcal), 0);
   const options = [];
-
-  if (food.kind !== "vegetable") {
-    const side = vegetableSideFor(food);
-    const smallerGrams = Math.min(gramsWithin(food, budget - side.kcal), grams - 10);
-    if (smallerGrams >= MIN_PORTION_GRAMS) {
-      options.push(
-        option([portion(food, smallerGrams), side], remainingBefore, "A smaller portion with vegetables, so the plate stays full."),
-      );
-    }
+  for (const swap of lighterSwaps(heaviest.food)) {
+    const swapGrams = Math.min(heaviest.grams, gramsWithin(swap, budget - restKcal));
+    if (swapGrams < MIN_PORTION_GRAMS) continue;
+    const swapped = portions.map((item, i) => (i === heaviestIndex ? portion(swap, swapGrams) : item));
+    options.push(option(swapped, remainingBefore, `Swap the ${heaviest.food.name} for a lighter ${swap.kind}.`));
   }
+  return options;
+}
 
-  if (food.kind) {
-    for (const swap of lighterSwaps(food)) {
-      const swapGrams = Math.min(grams, gramsWithin(swap, budget));
-      if (swapGrams >= MIN_PORTION_GRAMS) {
-        options.push(option([portion(swap, swapGrams)], remainingBefore, `A lighter ${swap.kind} instead.`));
-      }
-    }
-  }
+function ratherSuggestions({ items, mealType, dailyTarget, remainingBefore }) {
+  const budget = Math.min(remainingBefore, Math.round(dailyTarget * MEAL_SHARES[mealType]));
+  const scaled = scaledDownMeal(items, budget, remainingBefore);
+  const options = [...(scaled ? [scaled] : []), ...swappedMeals(items, budget, remainingBefore)];
 
   if (options.length === 0) {
     const side = portion(findFood("Salad greens"), SIDE_GRAMS);
@@ -76,15 +107,23 @@ function ratherSuggestions({ food, grams, mealType, dailyTarget, remainingBefore
   return { heading: "Try instead", options };
 }
 
-function addOnSuggestion({ food, grams, remainingBefore }) {
-  const meal = portion(food, grams);
-  const lowProtein = food.kind === "vegetable" || food.kind === "fruit";
-  const addition = lowProtein ? portion(findFood("Chicken breast"), 100) : vegetableSideFor(food);
-  const note = lowProtein
-    ? "Adding lean protein keeps you full longer."
-    : "Adding vegetables makes the meal more filling for very few calories.";
-  const options = addition.kcal <= remainingBefore - meal.kcal ? [option([meal, addition], remainingBefore, note)] : [];
-  return { heading: "Make it better", options };
+function addOnSuggestion({ items, remainingBefore }) {
+  const meal = mealPortions(items);
+  const mealKcal = meal.reduce((sum, item) => sum + item.kcal, 0);
+  const hasVegetable = items.some((item) => item.food.kind === "vegetable");
+  const hasProtein = items.some((item) => item.food.kind === "protein" || item.food.kind === "dairy");
+
+  let addition;
+  let note;
+  if (!hasVegetable) {
+    addition = vegetableSideFor(items);
+    note = "Adding vegetables makes the meal more filling for very few calories.";
+  } else if (!hasProtein) {
+    addition = portion(findFood("Chicken breast"), 100);
+    note = "Adding lean protein keeps you full longer.";
+  }
+  const fits = addition && addition.kcal <= remainingBefore - mealKcal;
+  return { heading: "Make it better", options: fits ? [option([...meal, addition], remainingBefore, note)] : [] };
 }
 
 /** The meal that fits the current time of day, used to preselect the meal type. */
@@ -96,10 +135,10 @@ export function mealTypeForHour(hour) {
 }
 
 /**
- * Suggests specific alternatives for a checked meal. A big or over-budget meal gets
+ * Suggests specific alternatives for a checked meal (a list of { food, grams }). A big or over-budget meal gets
  * smaller or lighter versions; a meal that fits gets a filling addition.
  */
-export function suggestAlternatives({ food, grams, mealType, verdict, dailyTarget, remainingBefore }) {
-  if (verdict === "good") return addOnSuggestion({ food, grams, remainingBefore });
-  return ratherSuggestions({ food, grams, mealType, dailyTarget, remainingBefore });
+export function suggestAlternatives({ items, mealType, verdict, dailyTarget, remainingBefore }) {
+  if (verdict === "good") return addOnSuggestion({ items, remainingBefore });
+  return ratherSuggestions({ items, mealType, dailyTarget, remainingBefore });
 }

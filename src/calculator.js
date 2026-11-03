@@ -77,12 +77,17 @@ export function portionCalories(kcalPer100g, grams) {
   return Math.round((kcalPer100g * grams) / 100);
 }
 
+/** Total calories of a meal made of several foods, each { food, grams }. */
+export function mealCalories(items) {
+  return items.reduce((sum, item) => sum + portionCalories(item.food.kcalPer100g, item.grams), 0);
+}
+
 /**
- * Judges one meal against the day's target, counting meals already eaten today.
- * Returns a verdict ("good" | "caution" | "over") and plain-language advice.
+ * Judges one meal (one or more foods) against the day's target, counting meals already
+ * eaten today. Returns a verdict ("good" | "caution" | "over") and plain-language advice.
  */
-export function judgeMeal({ food, grams, dailyTarget, eatenSoFar }) {
-  const kcal = portionCalories(food.kcalPer100g, grams);
+export function judgeMeal({ items, dailyTarget, eatenSoFar }) {
+  const kcal = mealCalories(items);
   const remainingBefore = dailyTarget - eatenSoFar;
   const remainingAfter = remainingBefore - kcal;
   const shareOfDay = kcal / dailyTarget;
@@ -95,8 +100,6 @@ export function judgeMeal({ food, grams, dailyTarget, eatenSoFar }) {
       `This meal is ${kcal} kcal, which takes you ${-remainingAfter} kcal over today's target. ` +
         "Today you would not have a deficit from this meal.",
     );
-    const fittingGrams = Math.max(0, Math.floor((remainingBefore * 100) / food.kcalPer100g / 10) * 10);
-    if (fittingGrams > 0) advice.push(`About ${fittingGrams} g of ${food.name} would fit what you have left today.`);
   } else if (shareOfDay > 0.4) {
     verdict = "caution";
     advice.push(
@@ -108,7 +111,8 @@ export function judgeMeal({ food, grams, dailyTarget, eatenSoFar }) {
     advice.push(`This meal is ${kcal} kcal and fits your plan, leaving ${remainingAfter} kcal for today.`);
   }
 
-  if (food.tip) advice.push(food.tip);
+  const tips = new Set(items.map((item) => item.food.tip).filter(Boolean));
+  advice.push(...tips);
 
   return { kcal, verdict, remainingAfter, advice };
 }

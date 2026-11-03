@@ -46,7 +46,7 @@
           <form id="profile-form" novalidate>
             <div class="grid">
               <label class="wide">Profile name
-                <input name="name" type="text" maxlength="40" placeholder="e.g. Yue – fall cut" required />
+                <input name="name" type="text" maxlength="40" placeholder="e.g. Alex – summer goal" required />
               </label>
               <label>Sex (for the calorie formula)
                 <select name="sex" required>
@@ -95,24 +95,40 @@
                   <option>Snack</option>
                 </select>
               </label>
-              <label class="wide">What did you eat?
-                <select name="food" required></select>
-              </label>
-              <label id="custom-name-field" hidden>Food name
-                <input name="customName" type="text" maxlength="40" />
-              </label>
-              <label id="custom-kcal-field" hidden>Calories per 100 g
-                <input name="customKcal" type="number" inputmode="numeric" min="1" max="900" />
-              </label>
-              <label>Amount (g)
-                <input name="grams" type="number" inputmode="numeric" min="1" max="3000" required />
-              </label>
             </div>
+            <p class="field-label">What did you eat?</p>
+            <ol id="food-rows"></ol>
+            <button id="add-food" type="button" class="secondary">+ Add another food</button>
             <ul id="meal-errors" class="errors" role="alert"></ul>
             <button type="submit">Check this meal</button>
           </form>
           <div id="verdict" hidden></div>
         </section>
+
+        <template id="food-row-template">
+          <li class="food-row">
+            <label class="food-choice">Food
+              <select name="food" required></select>
+            </label>
+            <label class="food-grams">Amount (g)
+              <input name="grams" type="number" inputmode="numeric" min="1" max="3000" required />
+            </label>
+            <button type="button" class="remove-food secondary" aria-label="Remove this food">✕</button>
+            <div class="custom-field custom-name" hidden>
+              <label>Food name
+                <input name="customName" type="text" maxlength="60" placeholder="e.g. oatmeal" />
+              </label>
+              <button type="button" class="search-food secondary">Search</button>
+            </div>
+            <div class="search-area" hidden>
+              <p class="search-status" role="status"></p>
+              <ul class="search-results"></ul>
+            </div>
+            <label class="custom-field custom-kcal" hidden>Calories per 100 g
+              <input name="customKcal" type="number" inputmode="numeric" min="1" max="900" />
+            </label>
+          </li>
+        </template>
 
         <section id="today-section" class="card" hidden>
           <h2>Today so far</h2>
