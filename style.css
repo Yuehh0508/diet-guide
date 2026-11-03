@@ -329,3 +329,41 @@ button.danger {
   border: 1px solid var(--over);
   margin-top: 24px;
 }
+
+.suggestions {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.suggestions h4 {
+  margin: 0 0 8px;
+}
+
+.suggestions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.suggestions li {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.suggestion-kcal {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.suggestion-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}

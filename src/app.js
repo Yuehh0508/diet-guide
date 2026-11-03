@@ -10,6 +10,7 @@ import {
   todaysMeals,
   updateProfile,
 } from "./profiles.js";
+import { mealTypeForHour, suggestAlternatives } from "./suggestions.js";
 
 const OTHER_FOOD = "__other__";
 const VERDICT_TITLES = {
@@ -117,6 +118,7 @@ function showRenameForm(editing) {
 function resetProfileScreen() {
   profileForm.reset();
   mealForm.reset();
+  mealForm.mealType.value = mealTypeForHour(new Date().getHours());
   renameForm.hidden = true;
   profileHeading.hidden = false;
   showErrors("rename-errors", []);
@@ -197,6 +199,22 @@ function renderToday() {
   document.getElementById("today-total").textContent = meals.length
     ? `Eaten ${eaten} of ${plan.target} kcal. ${Math.max(plan.target - eaten, 0)} kcal left.`
     : "";
+}
+
+function renderSuggestions({ heading, options }) {
+  if (options.length === 0) return "";
+  const items = options
+    .map((choice) => {
+      const foods = choice.items.map((item) => `${item.grams} g ${escapeHtml(item.name)}`).join(" + ");
+      return `
+        <li>
+          <strong>${foods}</strong>
+          <span class="suggestion-kcal">${choice.kcal} kcal · leaves ${Math.max(choice.leftAfter, 0)} kcal today</span>
+          <span class="suggestion-note">${escapeHtml(choice.note)}</span>
+        </li>`;
+    })
+    .join("");
+  return `<div class="suggestions"><h4>${heading}</h4><ul>${items}</ul></div>`;
 }
 
 function selectedFood(data) {
@@ -289,11 +307,20 @@ mealForm.addEventListener("submit", (event) => {
   const grams = Number(data.get("grams"));
   const eatenSoFar = meals.reduce((sum, meal) => sum + meal.kcal, 0);
   const result = judgeMeal({ food, grams, dailyTarget: plan.target, eatenSoFar });
+  const suggestions = suggestAlternatives({
+    food,
+    grams,
+    mealType: data.get("mealType"),
+    verdict: result.verdict,
+    dailyTarget: plan.target,
+    remainingBefore: plan.target - eatenSoFar,
+  });
 
   verdictBox.innerHTML = `
     <div class="verdict ${result.verdict}">
       <h3>${VERDICT_TITLES[result.verdict]}</h3>
       ${result.advice.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+      ${renderSuggestions(suggestions)}
     </div>`;
   verdictBox.hidden = false;
 
