@@ -170,6 +170,26 @@ button.secondary {
   color: var(--accent);
 }
 
+.plan-explainer {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.plan-explainer summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 10px 0;
+}
+
+.plan-explainer ol {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
 .warning {
   margin-top: 12px;
   padding: 10px 12px;
@@ -384,11 +404,67 @@ button.danger {
 
 .food-row {
   display: grid;
-  grid-template-columns: 1fr 110px 44px;
+  grid-template-columns: 64px 1fr 110px 44px;
+  grid-template-areas: "photo food grams remove";
   gap: 8px;
   align-items: end;
   padding-bottom: 12px;
   border-bottom: 1px dashed var(--border);
+}
+
+.food-row .food-photo,
+.food-row .food-photo-placeholder {
+  grid-area: photo;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+}
+
+.food-row .food-photo {
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.food-row .food-photo-placeholder {
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  border: 1px dashed var(--border);
+  opacity: 0.6;
+}
+
+.food-row .food-photo[hidden],
+.food-row .food-photo-placeholder[hidden] {
+  display: none;
+}
+
+.food-row .food-choice {
+  grid-area: food;
+  min-width: 0;
+}
+
+.food-row .food-grams {
+  grid-area: grams;
+}
+
+.food-row .remove-food {
+  grid-area: remove;
+}
+
+/* On a phone there is no room for four columns, so the amount moves under the food and the photo spans both. */
+@media (max-width: 480px) {
+  .food-row {
+    grid-template-columns: 64px 1fr 44px;
+    grid-template-areas:
+      "photo food remove"
+      "photo grams grams";
+    align-items: start;
+  }
+
+  .food-row .food-photo,
+  .food-row .food-photo-placeholder {
+    align-self: center;
+  }
 }
 
 .food-row .remove-food {
@@ -449,6 +525,19 @@ button.danger {
   gap: 12px;
 }
 
+.search-results img {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.search-results .result-name {
+  flex: 1;
+}
+
 .search-results small {
   color: var(--muted);
 }
@@ -461,4 +550,36 @@ button.danger {
 
 #add-food {
   margin-top: 12px;
+}
+
+.site-footer {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.site-footer a,
+.credits-list a {
+  color: var(--muted);
+}
+
+.credits-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.credits-list li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.credits-list img {
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 8px;
 }

@@ -30,7 +30,10 @@ export function validateGoal(goal) {
   if (!(heightCm >= 120 && heightCm <= 230)) problems.push("Height must be between 120 and 230 cm.");
   if (!(weightKg >= 35 && weightKg <= 300)) problems.push("Weight must be between 35 and 300 kg.");
   if (!ACTIVITY_LEVELS[activity]) problems.push("Choose an activity level.");
-  if (!(targetLossKg > 0 && targetLossKg < weightKg)) problems.push("Weight to lose must be more than 0 kg.");
+  if (!(targetLossKg > 0)) problems.push("Weight to lose must be more than 0 kg.");
+  else if (targetLossKg >= weightKg) {
+    problems.push(`Weight to lose must be less than your current weight (${weightKg} kg).`);
+  }
   if (!(weeks >= 1 && weeks <= 104)) problems.push("Time frame must be between 1 and 104 weeks.");
   return problems;
 }
@@ -44,7 +47,8 @@ export function dailyPlan(goal) {
   const maintenance = bmr * ACTIVITY_LEVELS[goal.activity].factor;
   const deficit = (goal.targetLossKg * KCAL_PER_KG_FAT) / (goal.weeks * 7);
   const minimum = MIN_DAILY_KCAL[goal.sex];
-  const target = Math.max(maintenance - deficit, minimum);
+  // Rounded parts are subtracted so the numbers shown to the user add up exactly.
+  const target = Math.max(Math.round(maintenance) - Math.round(deficit), minimum);
 
   const warnings = [];
   const weeklyLossKg = goal.targetLossKg / goal.weeks;

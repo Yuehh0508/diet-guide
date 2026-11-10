@@ -5,7 +5,7 @@ const SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 const MAX_RESULTS = 5;
 const TIMEOUT_MS = 15000;
 
-/** Turns raw Open Food Facts products into { name, brand, kcalPer100g }, dropping ones without usable calories. */
+/** Turns raw Open Food Facts products into { name, brand, kcalPer100g, photo }, dropping ones without usable calories. */
 export function toFoodResults(products) {
   const seen = new Set();
   const results = [];
@@ -14,10 +14,12 @@ export function toFoodResults(products) {
     const kcal = Number(product.nutriments?.["energy-kcal_100g"]);
     if (!name || !(kcal > 0 && kcal <= 900)) continue;
     const brand = (product.brands ?? "").split(",")[0].trim();
+    // Only HTTPS photo links are kept; a product without one simply shows no photo.
+    const photo = /^https:\/\//.test(product.image_front_small_url ?? "") ? product.image_front_small_url : "";
     const key = `${name.toLowerCase()}|${Math.round(kcal)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push({ name, brand, kcalPer100g: Math.round(kcal) });
+    results.push({ name, brand, kcalPer100g: Math.round(kcal), photo });
     if (results.length === MAX_RESULTS) break;
   }
   return results;
@@ -31,7 +33,7 @@ export async function searchFoods(query) {
     action: "process",
     json: "1",
     page_size: "20",
-    fields: "product_name,brands,nutriments",
+    fields: "product_name,brands,nutriments,image_front_small_url",
   });
   let response;
   try {

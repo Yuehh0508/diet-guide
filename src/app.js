@@ -1,4 +1,4 @@
-import { ACTIVITY_LEVELS, dailyPlan, judgeMeal, validateGoal } from "./calculator.js";
+import { ACTIVITY_LEVELS, KCAL_PER_KG_FAT, dailyPlan, judgeMeal, validateGoal } from "./calculator.js";
 import { searchFoods } from "./foodSearch.js";
 import { FOODS, findFood } from "./foods.js";
 import {
@@ -169,6 +169,30 @@ function showGoalForm() {
   profileForm.hidden = false;
 }
 
+/** Walks through the calculation with the user's own numbers, so the target is not a mystery. */
+function planExplanation(goal) {
+  const activity = ACTIVITY_LEVELS[goal.activity];
+  const unheldTarget = plan.maintenance - plan.deficit;
+  const lastStep =
+    plan.target > unheldTarget
+      ? `That would be ${unheldTarget} kcal, which is below the safe minimum, so your target is held at ${plan.target} kcal.`
+      : `${plan.maintenance} − ${plan.deficit} = <strong>${plan.target} kcal</strong> to eat per day.`;
+  return `
+    <details class="plan-explainer">
+      <summary>How is this worked out?</summary>
+      <ol>
+        <li>At rest, your body burns about <strong>${plan.bmr} kcal</strong> a day. This comes from your sex, age,
+          height, and weight (the Mifflin-St Jeor formula).</li>
+        <li>Your activity level (${escapeHtml(activity.label.toLowerCase())}) multiplies that by ${activity.factor}:
+          about <strong>${plan.maintenance} kcal</strong> a day keeps your weight the same.</li>
+        <li>Losing 1 kg of body fat takes about ${KCAL_PER_KG_FAT.toLocaleString("en-US")} kcal.
+          ${goal.targetLossKg} kg × ${KCAL_PER_KG_FAT.toLocaleString("en-US")} ÷ (${goal.weeks} weeks × 7 days)
+          = <strong>${plan.deficit} kcal</strong> less per day.</li>
+        <li>${lastStep}</li>
+      </ol>
+    </details>`;
+}
+
 function renderPlan() {
   const warnings = plan.warnings.map((w) => `<p class="warning">${escapeHtml(w)}</p>`).join("");
   planBox.innerHTML = `
@@ -177,6 +201,7 @@ function renderPlan() {
       <div class="stat"><strong>−${plan.deficit}</strong><span>daily deficit needed</span></div>
       <div class="stat target"><strong>${plan.target}</strong><span>kcal to eat per day</span></div>
     </div>
+    ${planExplanation(currentProfile.goal)}
     ${warnings}`;
   planBox.hidden = false;
   document.getElementById("meal-section").hidden = false;
@@ -234,6 +259,20 @@ function updateRemoveButtons() {
   rows.forEach((row) => (row.querySelector(".remove-food").hidden = rows.length === 1));
 }
 
+/** Shows a food's photo in its row, or the empty plate when there is no photo to show. */
+function showFoodPhoto(row, photo, name) {
+  const image = row.querySelector(".food-photo");
+  image.hidden = !photo;
+  row.querySelector(".food-photo-placeholder").hidden = Boolean(photo);
+  if (photo) {
+    image.src = photo;
+    image.alt = name;
+  } else {
+    image.removeAttribute("src");
+    image.alt = "";
+  }
+}
+
 function showSearchMessage(row, message) {
   row.querySelector(".search-area").hidden = false;
   row.querySelector(".search-status").textContent = message;
@@ -247,12 +286,15 @@ function showSearchResults(row, results) {
     const item = document.createElement("li");
     item.innerHTML = `
       <button type="button">
-        <span>${escapeHtml(result.name)}${result.brand ? `<br /><small>${escapeHtml(result.brand)}</small>` : ""}</span>
+        ${result.photo ? `<img src="${escapeHtml(result.photo)}" alt="" loading="lazy" />` : ""}
+        <span class="result-name">${escapeHtml(result.name)}${result.brand ? `<br /><small>${escapeHtml(result.brand)}</small>` : ""}</span>
         <span class="kcal">${result.kcalPer100g} kcal/100 g</span>
       </button>`;
+    item.querySelector("img")?.addEventListener("error", (event) => event.target.remove());
     item.querySelector("button").addEventListener("click", () => {
       row.querySelector('[name="customName"]').value = result.name;
       row.querySelector('[name="customKcal"]').value = result.kcalPer100g;
+      showFoodPhoto(row, result.photo, result.name);
       showSearchMessage(row, `Filled in ${result.name}: ${result.kcalPer100g} kcal per 100 g. You can still edit it.`);
     });
     list.append(item);
@@ -284,6 +326,8 @@ function setUpFoodSearch(row) {
   }
 
   searchButton.addEventListener("click", search);
+  // A typed name may no longer match the photo of a picked search result.
+  nameInput.addEventListener("input", () => showFoodPhoto(row, "", ""));
   nameInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -293,12 +337,15 @@ function setUpFoodSearch(row) {
 
 function addFoodRow() {
   const row = foodRowTemplate.content.firstElementChild.cloneNode(true);
+  row.querySelector(".food-photo").addEventListener("error", () => showFoodPhoto(row, "", ""));
   const select = row.querySelector("select");
   select.innerHTML = FOOD_OPTIONS;
   select.addEventListener("change", () => {
     const isOther = select.value === OTHER_FOOD;
     row.querySelectorAll(".custom-field").forEach((field) => (field.hidden = !isOther));
     if (!isOther) row.querySelector(".search-area").hidden = true;
+    const food = findFood(select.value);
+    showFoodPhoto(row, food?.photo, food?.name);
   });
   setUpFoodSearch(row);
   row.querySelector(".remove-food").addEventListener("click", () => {
